@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""読み物の HTML を「やさしいUI」（reading.css）にそろえる・確かめる。
+
+使い方:
+  reading-style apply <file.html>...
+      head の <style> を reading.css の中身に入れ替える（<style data-page> は残す）。
+      viewport の meta を足し、本文を <main> で包み、クラスのない <table> を表の共通の形（lines）にする。
+      何度かけても同じ結果になる。
+  reading-style check <file.html|フォルダ>... [--fix] [--json]
+      共通の見た目を使っていないもの・書き方で直してほしいところを一覧で出す。
+      フォルダを渡すと、その中の *.html をすべて見る。--fix は「そのまま直せるもの」だけ apply する。
+      見つかったら終了コード 1、なければ 0。
+  共通: --css <path> で reading.css の場所を変えられる（既定はこのスクリプトと同じフォルダの reading.css）。
+
+決まり:
+  - 共通の見た目を使っている印は、<style> の中の reading.css の1行目（MARK の文字）。
+  - その読み物だけに要る分は <style data-page> に分けて書く。apply しても残る。
+  - わざと違う見た目にするもの（アプリ風の試作など）は head に <meta name="reading-style" content="own"> を入れる。check から外れる。
+  - 「そのまま直せるもの」：<script> がなく、本文のクラスがすべて reading.css（か data-page）にあるもの。
+  - 要素に style= を直接書かない。大きさや余白は reading.css の形を使い、足りなければ reading.css へ足す。
+  - 1段落1つのこと。「どこ：」「見方：」のようなラベル＋<br> で1段落に詰めない。
+  - h1 のすぐ下に結論を1文（<p class="summary">）。結論を求めないページは <meta name="reading-lead" content="none">。
+  - 本文は <main> で包む（見出し・段落の形は main h1・main p に当てているため）。
+"""
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+DEFAULT_CSS = Path(__file__).resolve().parent / "reading.css"
+MARK = "やさしいUI 読み物の共通の見た目"
+OWN_RE = re.compile(r'<meta\s+name="reading-style"\s+content="own"', re.I)
+NO_LEAD_RE = re.compile(r'<meta\s+name="reading-lead"\s+content="none"', re.I)
+STYLE_RE = re.compile(r"<style\b([^>]*)>.*?</style>\s*", re.S | re.I)
+SCRIPT_RE = re.compile(r"<(script|template)\b.*?</\1>", re.S | re.I)
+TAG_RE = re.compile(r"<[^>]+>")
+SVG_RE = re.compile(r"<svg\b.*?</svg>", re.S | re.I)
+LONG = 200
+OUTSIDE_MAIN = "本文が <main> の外にある（main h1・main p の見た目が当たらない）"
+HEAD_SKIP = re.compile(r"\s*(?:<!--.*?-->|<h1\b.*?</h1>|<(p|div)\b[^>]*class=\"[^\"]*\b(?:meta|sub)\b[^\"]*\"[^>]*>.*?</\1>)", re.S | re.I)
+
+CSS_PATH = DEFAULT_CSS
+
+
+def css():
+    return CSS_PATH.read_text(encoding="utf-8")
+
+
+def known_classes(text):
+    return set(re.findall(r"\.([A-Za-z_][\w-]*)", text))
+
+
+def has_main(src):
+    return bool(re.search(r"<main\b", SCRIPT_RE.sub("", STYLE_RE.sub("", src)), re.I))
+
+
+def wrap_main(src):
+    """<main> がなければ、<body> の中身をそのまま <main> で包む。文章は変えない。"""
+    if has_main(src):
+        return src
+    m = re.search(r"<body\b[^>]*>", src, re.I)
+    if not m:
+        return src
+    end = re.search(r"</body>", src, re.I)
+    stop = end.start() if end else len(src)
+    return src[: m.end()] + "\n<main>\n" + src[m.end(): stop] + "\n</main>\n" + src[stop:]
+
+
+def apply(src):
+    keep = []
+
+    def drop(m):
+        if "data-page" in m.group(1):
+            keep.append(m.group(0).strip())
+        return ""
+
+    src = STYLE_RE.sub(drop, src)
+    block = "<style>\n" + css() + "</style>\n" + "".join(k + "\n" for k in keep)
+    if not re.search(r'<meta\s+name="viewport"', src, re.I):
+        block = '<meta name="viewport" content="width=device-width, initial-scale=1">\n' + block
+    if re.search(r"</head>", src, re.I):
+        src = re.sub(r"</head>", lambda _: block + "</head>", src, count=1, flags=re.I)
+    elif re.search(r"<body\b", src, re.I):
+        src = re.sub(r"<body\b", lambda _: block + "</head>\n<body", src, count=1, flags=re.I)
+    else:
+        src = block + src
+    src = wrap_main(src)
+    return re.sub(r"<table>", '<table class="lines">', src)
+
+
+def outside_main(src):
+    src = SCRIPT_RE.sub("", STYLE_RE.sub("", src))
+    src = re.sub(r"<head\b.*?</head>", "", src, flags=re.S | re.I)
+    src = re.sub(r"<main\b.*?</main>", "", src, flags=re.S | re.I)
+    src = re.sub(r"<(nav|header|footer|svg|template)\b.*?</\1>", "", src, flags=re.S | re.I)
+    return bool(re.search(r"<(h[1-3]|p)\b", src, re.I))
+
+
+def body_classes(src):
+    out = set()
+    for attr in re.findall(r'\bclass="([^"]*)"', STYLE_RE.sub("", src)):
+        out.update(attr.split())
+    return out
+
+
+def text_of(html):
+    return re.sub(r"\s+", "", TAG_RE.sub("", html)).replace("&nbsp;", "")
+
+
+def main_body(src):
+    src = SCRIPT_RE.sub("", STYLE_RE.sub("", src))
+    src = re.sub(r"<head\b.*?</head>", "", src, flags=re.S | re.I)
+    m = re.search(r"<main\b[^>]*>(.*)</main>", src, re.S | re.I) or re.search(r"<body\b[^>]*>(.*)</body>", src, re.S | re.I)
+    body = m.group(1) if m else src
+    return re.sub(r"<nav\b.*?</nav>", "", SVG_RE.sub("", body), flags=re.S | re.I)
+
+
+def has_conclusion(body):
+    if re.search(r'class="[^"]*\b(?:summary|lead)\b', body[:4000]):
+        return True
+    rest = body
+    while (m := HEAD_SKIP.match(rest)):
+        rest = rest[m.end():]
+    return bool(re.match(r"\s*<p\b", rest, re.I))
+
+
+def lint(src):
+    """書き方の「直してほしい」。本文の文字がほとんどないページ（JavaScript で描く・絵だけ）は見ない。"""
+    body = main_body(src)
+    if len(text_of(body)) < 40:
+        return []
+    out = []
+    styled = sorted({t.lower() for t in re.findall(r"<([a-zA-Z][\w-]*)\b[^>]*\sstyle\s*=", body)})
+    if styled:
+        out.append("要素に直接 style=（" + " ".join(styled) + "）")
+    if re.search(r"(?:<br\s*/?>\s*){3,}", body, re.I):
+        out.append("<br> を3つ以上つなげている")
+    labels = re.findall(r"<(?:b|strong)\b[^>]*>[^<]{1,20}(?:[：:]\s*</(?:b|strong)>|</(?:b|strong)>\s*[：:])[^<]*?<br\s*/?>", body, re.I)
+    if len(labels) >= 2:
+        out.append(f"「ラベル：」＋改行で詰めている（{len(labels)}か所）")
+    paras = re.findall(r"<p\b([^>]*)>(.*?)</p>", body, re.S | re.I)
+    long = [n for n in (len(text_of(x)) for _, x in paras) if n > LONG]
+    if long:
+        out.append(f"{LONG}字を超える段落が{len(long)}つ（最長{max(long)}字）")
+    if not NO_LEAD_RE.search(src) and not has_conclusion(body):
+        out.append("頭に結論の段落がない（h1 のすぐ下に p.summary を）")
+    return out
+
+
+def inspect(path):
+    src = path.read_text(encoding="utf-8", errors="replace")
+    if OWN_RE.search(src):
+        return None
+    warn = lint(src)
+    if MARK in src:
+        if outside_main(src):
+            warn.insert(0, OUTSIDE_MAIN)
+        return {"path": str(path), "ok_style": True, "warn": warn} if warn else None
+    extra = "".join(m.group(0) for m in STYLE_RE.finditer(src) if "data-page" in m.group(1))
+    unknown = sorted(body_classes(src) - known_classes(css() + extra) - {"lines"})
+    has_script = bool(re.search(r"<script\b", src, re.I))
+    return {"path": str(path), "auto": not unknown and not has_script, "unknown": unknown, "script": has_script, "warn": warn}
+
+
+def candidates(targets):
+    for t in targets:
+        p = Path(t)
+        if p.is_dir():
+            yield from sorted(p.rglob("*.html"))
+        elif p.suffix.lower() == ".html":
+            yield p
+
+
+def main():
+    global CSS_PATH
+    ap = argparse.ArgumentParser(description="読み物の HTML をやさしいUI（reading.css）にそろえる・確かめる")
+    ap.add_argument("--css", help="reading.css の場所（既定はスクリプトと同じフォルダ）")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser("apply")
+    a.add_argument("files", nargs="+")
+    c = sub.add_parser("check")
+    c.add_argument("targets", nargs="+")
+    c.add_argument("--fix", action="store_true")
+    c.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+    if args.css:
+        CSS_PATH = Path(args.css)
+
+    if args.cmd == "apply":
+        for f in args.files:
+            p = Path(f)
+            p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
+            print(f"そろえた：{p}")
+        return 0
+
+    found = [r for r in (inspect(f) for f in candidates(args.targets)) if r]
+    for r in found:
+        if args.fix and r.get("auto"):
+            p = Path(r["path"])
+            p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
+            r["fixed"] = True
+        elif args.fix and r.get("ok_style") and OUTSIDE_MAIN in r["warn"]:
+            p = Path(r["path"])
+            src = p.read_text(encoding="utf-8")
+            if not has_main(src) and not re.search(r"<script\b", src, re.I):
+                p.write_text(wrap_main(src), encoding="utf-8")
+                r["warn"].remove(OUTSIDE_MAIN)
+                r["fixed"] = not r["warn"]
+    if args.json:
+        print(json.dumps(found, ensure_ascii=False, indent=1))
+    else:
+        for r in found:
+            if r.get("ok_style"):
+                if r["warn"]:
+                    print(f"直してほしい　{r['path']}（{'、'.join(r['warn'])}）")
+            elif r.get("fixed"):
+                print(f"直した　　{r['path']}")
+            elif r.get("auto"):
+                print(f"直せる　　{r['path']}")
+            else:
+                why = ("script あり、" if r["script"] else "") + ("知らないクラス：" + " ".join(r["unknown"]) if r["unknown"] else "")
+                print(f"手で直す　{r['path']}（{why.rstrip('、')}）")
+            if r.get("warn") and not r.get("ok_style"):
+                print(f"　　書き方：{'、'.join(r['warn'])}")
+        if not found:
+            print("問題なし")
+    return 1 if [r for r in found if not r.get("fixed")] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
