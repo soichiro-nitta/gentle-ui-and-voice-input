@@ -21,6 +21,13 @@
   - 1段落1つのこと。「どこ：」「見方：」のようなラベル＋<br> で1段落に詰めない。
   - h1 のすぐ下に結論を1文（<p class="summary">）。結論を求めないページは <meta name="reading-lead" content="none">。
   - 本文は <main> で包む（見出し・段落の形は main h1・main p に当てているため）。
+  - check の「直してほしい」：
+      本文の見出し・段落が <main> の外にある（--fix は <main> も <script> もないものだけ包む）、
+      reading.css が古い（--fix で入れ直す）、reading.css のほかに <style>（data-page なし）や外の CSS（<link rel="stylesheet">）がある、
+      reading.css にないクラスを使っている、本文の要素の style=、<br> の3つ以上の連続、「ラベル：」＋<br> が2か所以上、
+      200字を超える段落（会話の生ログ p.raw は除く）、頭に結論がない。
+    本文の文字がほとんどないページ（JavaScript で描く・絵だけ）と、frag*.html・*.before.html（作業のかけら・前の版）は見ない。
+    own の印があるものは、書き方も見ない。
 """
 import argparse
 import json
@@ -38,7 +45,11 @@ TAG_RE = re.compile(r"<[^>]+>")
 SVG_RE = re.compile(r"<svg\b.*?</svg>", re.S | re.I)
 LONG = 200
 OUTSIDE_MAIN = "本文が <main> の外にある（main h1・main p の見た目が当たらない）"
-HEAD_SKIP = re.compile(r"\s*(?:<!--.*?-->|<h1\b.*?</h1>|<(p|div)\b[^>]*class=\"[^\"]*\b(?:meta|sub)\b[^\"]*\"[^>]*>.*?</\1>)", re.S | re.I)
+OLD_CSS = "reading.css が古い・書きかえてある（apply で入れ直す）"
+LINK_CSS_RE = re.compile(r"<link\b[^>]*rel=[\"']?stylesheet[^>]*>", re.I)
+# 作業の途中のかけら・前の版（読み物ではない）
+SCRAP_RE = re.compile(r"(?:^|/)(?:frag[^/]*|[^/]*\.before)\.html$")
+HEAD_SKIP = re.compile(r"\s*(?:<!--.*?-->|<h1\b.*?</h1>|<(p|div)\b[^>]*class=\"[^\"]*\b(?:meta|sub|muted)\b[^\"]*\"[^>]*>.*?</\1>)", re.S | re.I)
 
 CSS_PATH = DEFAULT_CSS
 
@@ -112,12 +123,14 @@ def main_body(src):
     src = SCRIPT_RE.sub("", STYLE_RE.sub("", src))
     src = re.sub(r"<head\b.*?</head>", "", src, flags=re.S | re.I)
     m = re.search(r"<main\b[^>]*>(.*)</main>", src, re.S | re.I) or re.search(r"<body\b[^>]*>(.*)</body>", src, re.S | re.I)
-    body = m.group(1) if m else src
+    body = m.group(1) if m else re.sub(r"<!doctype[^>]*>|</?html\b[^>]*>|<meta\b[^>]*>|<link\b[^>]*>|<title\b.*?</title>", "", src, flags=re.S | re.I)
     return re.sub(r"<nav\b.*?</nav>", "", SVG_RE.sub("", body), flags=re.S | re.I)
 
 
 def has_conclusion(body):
     if re.search(r'class="[^"]*\b(?:summary|lead)\b', body[:4000]):
+        return True
+    if re.search(r"<h[2-3]\b[^>]*>[^<]*(?:結論|まとめ|要点|いまの状態)", body[:1500]):
         return True
     rest = body
     while (m := HEAD_SKIP.match(rest)):
@@ -140,11 +153,30 @@ def lint(src):
     if len(labels) >= 2:
         out.append(f"「ラベル：」＋改行で詰めている（{len(labels)}か所）")
     paras = re.findall(r"<p\b([^>]*)>(.*?)</p>", body, re.S | re.I)
-    long = [n for n in (len(text_of(x)) for _, x in paras) if n > LONG]
+    long = [n for n in (len(text_of(x)) for a, x in paras if "raw" not in a) if n > LONG]
     if long:
         out.append(f"{LONG}字を超える段落が{len(long)}つ（最長{max(long)}字）")
     if not NO_LEAD_RE.search(src) and not has_conclusion(body):
         out.append("頭に結論の段落がない（h1 のすぐ下に p.summary を）")
+    return out
+
+
+def style_warn(src):
+    """共通の見た目を入れたつもりでも効かない原因：古い reading.css、ほかの CSS、reading.css にないクラス。"""
+    out = []
+    blocks = [(m.group(1), m.group(0)) for m in STYLE_RE.finditer(src)]
+    mine = [b for a, b in blocks if MARK in b]
+    if mine and css().strip() not in mine[0]:
+        out.append(OLD_CSS)
+    others = [b for a, b in blocks if MARK not in b and "data-page" not in a]
+    if others:
+        out.append(f"reading.css のほかに <style> が{len(others)}つ（その読み物だけの分なら data-page を付ける）")
+    if LINK_CSS_RE.search(src):
+        out.append("外の CSS を読み込んでいる（<link rel=\"stylesheet\">。reading.css の形を上書きすることがある）")
+    extra = "".join(b for a, b in blocks if "data-page" in a)
+    unknown = sorted(body_classes(src) - known_classes(css() + extra) - {"lines"})
+    if unknown:
+        out.append("reading.css にないクラス：" + " ".join(unknown))
     return out
 
 
@@ -154,6 +186,7 @@ def inspect(path):
         return None
     warn = lint(src)
     if MARK in src:
+        warn = style_warn(src) + warn
         if outside_main(src):
             warn.insert(0, OUTSIDE_MAIN)
         return {"path": str(path), "ok_style": True, "warn": warn} if warn else None
@@ -167,7 +200,7 @@ def candidates(targets):
     for t in targets:
         p = Path(t)
         if p.is_dir():
-            yield from sorted(p.rglob("*.html"))
+            yield from (f for f in sorted(p.rglob("*.html")) if not SCRAP_RE.search(str(f)))
         elif p.suffix.lower() == ".html":
             yield p
 
@@ -200,6 +233,11 @@ def main():
             p = Path(r["path"])
             p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
             r["fixed"] = True
+        elif args.fix and r.get("ok_style") and OLD_CSS in r["warn"]:
+            p = Path(r["path"])
+            p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
+            r["warn"] = [w for w in (inspect(p) or {}).get("warn", [])]
+            r["fixed"] = not r["warn"]
         elif args.fix and r.get("ok_style") and OUTSIDE_MAIN in r["warn"]:
             p = Path(r["path"])
             src = p.read_text(encoding="utf-8")
@@ -212,7 +250,9 @@ def main():
     else:
         for r in found:
             if r.get("ok_style"):
-                if r["warn"]:
+                if r.get("fixed"):
+                    print(f"直した　　{r['path']}")
+                elif r["warn"]:
                     print(f"直してほしい　{r['path']}（{'、'.join(r['warn'])}）")
             elif r.get("fixed"):
                 print(f"直した　　{r['path']}")

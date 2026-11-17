@@ -7,10 +7,11 @@
 <style>
 /* やさしいUI 読み物の共通の見た目
    白地に濃いグレーの文字。文章と余白が主役。
-   色は意味のあるところだけ：青＝要点・リンク、緑＝完了、赤＝エラー、オレンジ＝返事待ち・期限が近い。
-   ボーダーは使わない（面の明るさの差と余白で分ける）。影は浮くものだけ（この読み物には浮くものがないので使わない）。
-   文字の太さは medium（500）が強調の基本。600 は見出しだけ。
-   使い方：<style> に中身をそのまま入れる。reading-style apply <file.html> でも入る。 */
+   色は意味のあるところだけ：青＝要点・リンク、オレンジ＝返事待ち・期限が近い、緑＝完了（赤＝エラーは、どうしても要るときだけ）。
+   枠・カード・影は使わない（面の明るさの差と余白で分ける）。
+   見出し・段落の形は main h1・main p に当てている。本文は必ず <main> で包む。
+   使い方：<style> に中身をそのまま入れる。reading-style apply <file.html> でも入る。
+   使える部品の一覧は COMPONENTS.md、組み立ての手本は examples/today.html。 */
 :root { color-scheme: light; --fg: #3a3a3c; --sub: #8a8a8e; --faint: #c7c7cc; --row: #f6f6f8;
   --blue: #2f6fd6; --wait: #d06a12; --done: #34a356; --err: #d93a3a; }
 html { -webkit-text-size-adjust: 100%; }
@@ -23,10 +24,9 @@ main { max-width: 640px; margin: 0 auto; }
 main h1 { font-size: 15px; font-weight: 500; color: var(--sub); margin: 0 0 12px; letter-spacing: .03em; }
 main h2 { font-size: 14px; font-weight: 600; color: var(--sub); margin: 60px 0 14px; letter-spacing: .06em; }
 main h2 .note { font-weight: 400; margin-left: .4em; }
-main h3 { font-size: 16px; font-weight: 600; margin: 36px 0 8px; }
 
-/* 結論：h1 のすぐ下に1文。本文より一段大きく、太すぎない */
-.summary { font-size: 21px; line-height: 1.7; font-weight: 400; margin: 0 0 8px; }
+/* 総括（結論）：h1 のすぐ下に1文。本文より一段大きく、太すぎない */
+.summary { font-size: 21px; line-height: 1.7; font-weight: 400; color: var(--fg); margin: 0 0 8px; }
 .lead { font-size: 22px; line-height: 1.65; font-weight: 500; margin: 0 0 10px; }
 .lead + p { margin-top: 0; }
 
@@ -35,109 +35,151 @@ ul, ol { margin: 0; padding: 0 0 0 1.2em; }
 li { margin: 0 0 14px; padding-left: .2em; }
 li::marker { color: var(--faint); }
 
-/* 動きの並び（ul.log）：小さなグレーの点。済みは li に done を付けると緑の丸に白いチェック */
+/* 動きの並び（ul.log）：小さなグレーの点。済みは li に done を付けると、点が緑で塗った丸（白いチェック入り）になる。
+   動きの並びは済みが多いので、文字の色は変えない。古い書き方（先頭の <span class="ok">済み</span>）も同じ見た目で出す（互換） */
 ul.log { list-style: none; padding: 0; }
 ul.log li { position: relative; padding-left: 32px; }
 ul.log li::before { content: ""; position: absolute; left: 7px; top: calc(.9em - 3px); width: 6px; height: 6px;
   border-radius: 50%; background: var(--faint); }
 ul.log li.done::before { left: 1px; top: calc(.9em - 9px); width: 18px; height: 18px; background: var(--done); }
-ul.log li.done::after, ul.todo li.done::after { content: ""; position: absolute; width: 4px; height: 8px;
+ul.log li.done::after { content: ""; position: absolute; left: 8px; top: calc(.9em - 5.5px); width: 4px; height: 8px;
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-ul.log li.done::after { left: 8px; top: calc(.9em - 5.5px); }
-ul.log li.error::before { background: var(--err); }
+ul.log li:has(> .ok:first-child)::before { display: none; }
+ul.log li > .ok:first-child, .check { position: absolute; left: 1px; top: 7px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--done); font-size: 0; color: transparent; }
+.check { position: relative; display: inline-block; top: 0; left: 0; vertical-align: -3px; margin-right: 8px; }
+ul.log li > .ok:first-child::after, .check::after { content: ""; position: absolute; left: 6.5px; top: 3.5px;
+  width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+/* 先頭の「失敗」などの印は小さく */
+li > .wait:first-child { font-size: 14px; margin-right: .6em; }
 
-/* やること（ul.todo）：中が空のうすい丸。済みは li に done：緑の丸に白いチェック、文字は少し薄く（取り消し線なし） */
+/* ToDo：中が空のうすい丸。済みは li に done を付ける：緑で塗った丸に白いチェック、文字は少し薄く（取り消し線なし）。「済み」の文字は書かない */
 ul.todo { list-style: none; padding: 0; }
 ul.todo li { position: relative; padding-left: 32px; margin-bottom: 16px; }
 ul.todo li::before { content: ""; position: absolute; left: 0; top: calc(.9em - 10px); width: 20px; height: 20px;
   border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--faint); }
+ul.todo .wait { font-size: 15px; margin-right: .6em; }
 ul.todo li.done { color: var(--sub); }
 ul.todo li.done::before { background: var(--done); box-shadow: none; }
-ul.todo li.done::after { left: 7.5px; top: calc(.9em - 6px); }
+ul.todo li.done::after { content: ""; position: absolute; left: 7.5px; top: calc(.9em - 6px); width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 
-/* 予定（ul.plan）：時刻（右寄せ）と内容の2列。罫線は使わず、ごく薄い背景を1行おきに */
+/* 予定：時刻（右寄せ）と内容の2列の表。罫線は使わず、ごく薄い背景を1行おきに */
 ul.plan { list-style: none; padding: 0; margin: 0 -14px; }
 ul.plan li { display: grid; grid-template-columns: 3.2em 1fr; column-gap: 20px; align-items: baseline;
   margin: 0; padding: 10px 14px; border-radius: 12px; }
 ul.plan li:nth-child(odd) { background: var(--row); }
-ul.plan .time { margin: 0; text-align: right; color: var(--sub); }
+ul.plan .time { margin: 0; text-align: right; color: var(--sub); font-weight: 500; }
+ul.plan .links { font-size: 14px; margin-left: .6em; white-space: nowrap; }
+ul.plan .links a + a { margin-left: .8em; }
 ul.plan li.past { opacity: .45; }
 
-/* 折りたたみ（詳しい根拠など。最初は閉じておく） */
+/* 予定の下の「このあと」：同じ表の形で、日付の列＋内容。少し小さく */
+p.later { color: var(--sub); font-size: 14px; font-weight: 600; letter-spacing: .06em; margin: 28px 0 6px; }
+ul.plan.later { font-size: 16px; line-height: 1.7; }
+ul.plan.later li { grid-template-columns: 6.6em 1fr; padding: 8px 14px; }
+
+/* 今週の予定：曜日を左に */
+dl.week { margin: 0; }
+dl.week dt { font-weight: 600; margin: 16px 0 2px; }
+dl.week dt:first-child { margin-top: 0; }
+dl.week dd { margin: 0 0 2px; }
+
+/* 折りたたみ（最初は閉じておく） */
 details { margin: 60px 0 0; }
 details summary { font-size: 14px; font-weight: 600; color: var(--sub); cursor: pointer; list-style: none; }
 details summary::-webkit-details-marker { display: none; }
 details summary::before { content: "＋"; margin-right: .4em; }
 details[open] summary::before { content: "－"; }
-details > ul, details > p { margin-top: 12px; }
+details > ul { margin-top: 12px; }
 
-/* 意味のある色。どれも medium（500）。bold にしない */
 a { color: var(--blue); text-decoration: none; }
 a:hover { text-decoration: underline; }
-strong, .key, .wait, .ok, .err { font-weight: 500; }
+strong, .key { font-weight: 600; }
 .key { color: var(--blue); }
-.ok { color: var(--done); }
-.err { color: var(--err); }
-.wait { color: var(--wait); }
-li > .wait:first-child, li > .err:first-child { font-size: 15px; margin-right: .6em; }
+.wait { color: var(--wait); font-weight: 600; }
+.ok { color: var(--done); font-weight: 600; }
 .time { font-variant-numeric: tabular-nums; font-weight: 500; margin-right: .5em; }
-.note, .sub, .meta { color: var(--sub); font-size: 15px; }
+.note, .sub { color: var(--sub); font-size: 15px; }
 p.note { margin-top: 56px; }
 
-/* 画像：角丸と最大幅をそろえる。Before/After は .pair で同じ大きさに横並び（狭い幅では縦） */
 img, video { max-width: 100%; height: auto; border-radius: 12px; }
+table { border-collapse: collapse; font-size: 16px; }
+th, td { text-align: left; padding: 4px 12px 4px 0; vertical-align: top; }
+
+/* 画像つきの資料（変更の確認・会議で見せる資料）：画像は角丸・最大幅をそろえ、Before/After は同じ大きさで横に並べる。狭い幅では縦に。
+   <main class="wide"> で画像の幅を広げる（文章の幅は 640px のまま） */
 main.wide { max-width: 960px; }
 main.wide > p, main.wide > ul, main.wide > ol, main.wide > .note { max-width: 640px; }
 figure { margin: 16px 0 32px; }
-figure img { display: block; width: 100%; border-radius: 12px; background: var(--row); }
+figure img { display: block; width: 100%; border-radius: 12px; box-shadow: 0 0 0 1px #ececf0; }
 figcaption { font-size: 14px; color: var(--sub); line-height: 1.6; margin-top: 8px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0 32px; align-items: start; }
 .pair figure { margin: 0; }
-
-/* 表：罫線なし。見出しの行はグレーの小さな文字、行は1行おきにごく薄い背景 */
-table { border-collapse: collapse; font-size: 16px; }
-th, td { text-align: left; padding: 4px 12px 4px 0; vertical-align: top; }
+main h3 { font-size: 16px; font-weight: 600; margin: 36px 0 8px; }
 table.lines { width: 100%; }
-table.lines th, table.lines td { padding: 10px 14px; }
-table.lines th { font-size: 14px; font-weight: 500; color: var(--sub); }
-table.lines tbody tr:nth-child(odd) { background: var(--row); }
-td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.tw { overflow-x: auto; margin: 0 0 20px; }
-
+table.lines th, table.lines td { padding: 10px 16px 10px 0; border-bottom: 1px solid #ededf0; }
+table.lines th { font-size: 14px; font-weight: 600; color: var(--sub); }
+.scroll { overflow-x: auto; }
+.scroll img { max-width: none; border-radius: 6px; display: block; margin: 2px 0; }
 code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--row); padding: 1px 6px; border-radius: 6px; }
-pre { white-space: pre-wrap; background: var(--row); padding: 16px 18px; border-radius: 12px;
-  font: inherit; font-size: 16px; line-height: 1.75; margin: 0 0 16px; }
-pre code { background: none; padding: 0; }
-blockquote { margin: 8px 0 14px; padding: 0 0 0 16px; color: var(--sub); font-size: 15px; }
+div.note { margin-top: 64px; }
+div.note h2 { margin-top: 0; }
+div.note li { margin-bottom: 8px; }
+@media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
 
-/* グラフの凡例：<span class="c-blue">名前</span> を並べる。グラフの色も青・オレンジ・緑・赤とグレーだけ */
-.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--sub); margin: 0 0 8px; }
-.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 6px;
-  vertical-align: middle; background: var(--c, var(--faint)); border-radius: 2px; }
-.legend .c-blue { --c: var(--blue); }
-.legend .c-wait { --c: var(--wait); }
-.legend .c-done { --c: var(--done); }
-.legend .c-err { --c: var(--err); }
-svg text { fill: var(--sub); }
-
+/* 表：本文の幅の中に収め、列が多くて入りきらないときは表の中だけ横にスクロール（ページは横に動かない） */
 @media (max-width: 720px) {
-  .pair { grid-template-columns: 1fr; }
   table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   th, td { min-width: 5em; }
+  table.lines th, table.lines td { padding: 10px 14px 10px 0; }
+  .scroll { max-width: 100%; }
   pre { max-width: 100%; overflow-x: auto; }
 }
 
-/* スマホ：予定は時刻を上・内容を下の2段に */
+/* iPhone：予定は時刻を上・内容を下の2段に。行の背景も本文と同じ左右の余白の内側に収める */
 @media (max-width: 430px) {
-  body { padding: 32px 16px 48px; font-size: 17px; }
+  body { padding: 32px 20px 48px; font-size: 17px; }
   .summary { font-size: 19px; }
   .lead { font-size: 20px; }
   main h2, details { margin-top: 48px; }
   ul.plan { margin: 0; }
-  ul.plan li { grid-template-columns: 1fr; padding: 8px 12px; }
+  ul.plan li, ul.plan.later li { grid-template-columns: 1fr; padding: 8px 12px; }
   ul.plan .time { text-align: left; font-size: 14px; line-height: 1.5; }
+  ul.plan .links { white-space: normal; }
   table { font-size: 15px; }
 }
+
+/* ほかの読み物でよく使う形（reading-style apply でそろえるときの受け皿）。
+   .meta（古い書き方の .muted・.small も同じ）は日付・出どころの小さな行。.warn はオレンジ（まだ送っていない・注意）。td.n は数字の列（右寄せ）。
+   .tw は表を包む箱（横にはみ出すときだけ表の中で横に動く）。pre は文面の案。blockquote は引用（枠なし、グレーの文字）。
+   .legend はグラフの凡例（<span class="c-blue">名前</span> を並べる。c-blue・c-wait・c-done・c-err）。グラフの色も青・オレンジ・緑とグレーだけ。 */
+.meta, .muted, .small { color: var(--sub); font-size: 15px; }
+.v { font-weight: 600; }
+.warn { color: var(--wait); font-weight: 600; }
+td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tw, .tbl, .table-wrap { overflow-x: auto; margin: 0 0 20px; }
+/* 画像を横に並べる（.pair と同じ。古い書き方の .row も受ける） */
+.row { display: flex; gap: 20px; flex-wrap: wrap; margin: 16px 0 32px; align-items: flex-start; }
+.row figure { flex: 1; min-width: 220px; margin: 0; }
+pre { white-space: pre-wrap; background: var(--row); padding: 16px 18px; border-radius: 12px;
+  font: inherit; font-size: 16px; line-height: 1.75; margin: 0 0 16px; }
+blockquote { margin: 8px 0 14px; padding: 0 0 0 16px; color: var(--sub); font-size: 15px; white-space: pre-wrap; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--sub); margin: 0 0 8px; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 3px; margin-right: 6px;
+  vertical-align: middle; background: var(--c, var(--faint)); border-radius: 2px; }
+svg text { fill: var(--sub); }
+
+/* エラー（赤）：どうしても要るときだけ。ふだんの「止まった・失敗」はオレンジ（.wait）で書く */
+.err { color: var(--err); font-weight: 600; }
+li > .err:first-child { font-size: 14px; margin-right: .6em; }
+ul.log li.error::before { background: var(--err); }
+/* グラフの凡例の色を、style= を書かずに付ける：<span class="c-blue">名前</span> */
+.legend .c-blue { --c: var(--blue); }
+.legend .c-wait { --c: var(--wait); }
+.legend .c-done { --c: var(--done); }
+.legend .c-err { --c: var(--err); }
+pre code { background: none; padding: 0; }
 </style>
 </head>
 <body>

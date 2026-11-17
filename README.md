@@ -6,7 +6,7 @@
 ## 中身
 
 - [`reading/`](reading/)：やさしいUIの読み物の作り方
-  - `reading.css`（共通の見た目）、書き方の決まり、見本の HTML、見た目をそろえて確かめるスクリプト `reading-style`
+  - `reading.css`（共通の見た目）、使える部品の一覧（`COMPONENTS.md`）、今日のまとめの手本（`examples/today.html`）、書き方の決まり、見た目をそろえて確かめるスクリプト `reading-style`
 - [`design/`](design/)：デザインの考え方
   - やさしい日本語、文字と余白が主役、線を引かない、控えめな色、文字の太さ、短く意味のある動き
 - [`voice-input-mac/`](voice-input-mac/)：声入力（Mac）（右シフトで話して、Macの中だけで文字にする道具）
@@ -14,11 +14,14 @@
 
 ## すぐ試す
 
-読み物の見本を開く：
+読み物の手本を開く：
 
 ```sh
-open reading/examples/sample.html
+open reading/examples/today.html    # 今日のまとめ（1日のまとめ）
+open reading/examples/sample.html   # ふつうの読み物
 ```
+
+作り方と、AI に作らせるときの頼み方は [`reading/README.md`](reading/README.md)、使える部品は [`reading/COMPONENTS.md`](reading/COMPONENTS.md) を見てください。
 
 自分の HTML を同じ見た目にそろえて、確かめる：
 
