@@ -64,6 +64,7 @@ reading/README.md と reading/COMPONENTS.md を読んで、reading/examples/toda
 ### 形
 
 - 本文は `<main>` で包みます。見出しや段落の見た目は `main h1`・`main p` に当てているためです。
+- 並びは「広い枠の中で、文章は左寄せ」。枠は 960px で画面の中央、文章は 640px で枠の左に寄せ、画像や表は枠いっぱいまで使います（狭い画面では1列）。
 - 要素に `style=` を直接書きません。足りない形は `reading.css` に足します。
 - その読み物だけに要る分は `<style data-page>` に分けて書きます。`apply` しても消えません。
 - わざと違う見た目にするもの（アプリ風の試作など）は、head に `<meta name="reading-style" content="own">` を入れます。`check` の対象から外れます。
