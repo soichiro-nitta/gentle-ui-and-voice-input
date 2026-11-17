@@ -4,7 +4,7 @@
 -- クリックはふだん下のアプリへ通る。ピル・カードの上だけ、ドラッグで動かせて、2本指スクロールでカードの一覧を送れる
 -- （hs.eventtap で、面の上の操作だけを受け取る）。
 -- 出る場所は画面の右側（右端から少し内側、縦は真ん中より少し上）。面は右の端をそろえて、カードになるときは左へ広がる。
--- 動かした場所は hs.settings の koe.pillPos に覚え（面の右の端と縦の真ん中）、次から同じ場所に出す。
+-- 動かした場所は hs.settings の voiceInput.pillPos に覚え（面の右の端と縦の真ん中）、次から同じ場所に出す。
 -- 画面の構成が変わったら右の既定に戻す。ダブルクリックで右の既定へ。カードが画面の左からはみ出すときだけ、右へずらして出す。
 -- 絵文字は使わない。
 --   recording：赤の点がゆっくり明滅  transcribing：青の小さなくるくる
@@ -142,10 +142,10 @@ local function pillWidth(textW)
 end
 
 -- 窓はカードのいちばん大きい形が入る大きさ。面の右の端＝窓の右の端から SHADOW 内側、面の縦の真ん中＝窓の縦の真ん中。
--- 置き場所（anchor）は、面の右の端の x と縦の真ん中の y。覚えた場所（koe.pillPos。そのときの画面と同じときだけ）か、右の既定。
+-- 置き場所（anchor）は、面の右の端の x と縦の真ん中の y。覚えた場所（voiceInput.pillPos。そのときの画面と同じときだけ）か、右の既定。
 local CANVAS_W = M.CARD_W + SHADOW * 2
 local CANVAS_H = M.MAX_H + SHADOW * 2
-local POS_KEY = "koe.pillPos"
+local POS_KEY = "voiceInput.pillPos"
 local EDGE = 32 -- 右の既定：画面の右端からの間
 local ABOVE = 0.42 -- 右の既定：縦は画面の上からこの割合（真ん中より少し上）
 local anchor = nil -- 今の置き場所 { x = 面の右の端, y = 面の縦の真ん中 }
@@ -658,7 +658,7 @@ stopTap = function()
   end
 end
 
--- eventtap はまれに macOS に止められるので、出ている間に止まっていたら動かし直す（koe.lua の見張りから呼ぶ）。
+-- eventtap はまれに macOS に止められるので、出ている間に止まっていたら動かし直す（voice-input.lua の見張りから呼ぶ）。
 function M.checkTap()
   if tap and not tap:isEnabled() then
     tap:start()

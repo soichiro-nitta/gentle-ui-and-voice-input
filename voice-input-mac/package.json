@@ -1,5 +1,5 @@
 {
-  "name": "koe-mac",
+  "name": "voice-input-mac",
   "private": true,
   "type": "module",
   "description": "右シフトで話して、Macの中だけで文字にする道具",

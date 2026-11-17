@@ -2,7 +2,7 @@
 -- pill.lua が描き、ここは頭の行より下だけを描く。
 -- 中身は、この話し続けモードで送った言葉の一覧だけ（新しい順。小さなアイコン付き、古いものほど少し薄い）。
 -- いつ広がるか：話し続けモードの間に、言葉を送ったとき。話し始めても閉じない（頭の行の状態だけ「話しています」に変わる）。
--- いつ縮むか：モードを止めたら、koe.lua が1秒（koe.cardLinger）でピルごと消す。止める印・画面共有が始まったらピルへ戻す。
+-- いつ縮むか：モードを止めたら、voice-input.lua が1秒（voiceInput.cardLinger）でピルごと消す。止める印・画面共有が始まったらピルへ戻す。
 -- 止める印（設定の pauseFile）がある間と画面共有中は広げない（ピルだけ）。
 -- 一覧がカードに入りきらないときは、カードの上で2本指スクロールすると一覧が送られる（上下の端は面の色へぼかす）。
 -- 使い方：card.attach(pill)、card.start()（モードを始めた）、card.stop()（止めた）、card.addOwn(送った言葉)、card.preview(言葉の配列)（試し）。
@@ -30,7 +30,7 @@ local TONE = {
   muted = hex(0x8e8e93),
 }
 
--- 止める印のファイルとアイコンは、koe.lua が設定から入れる（M.pauseFile・M.iconPath。どちらも省略できる）。
+-- 止める印のファイルとアイコンは、voice-input.lua が設定から入れる（M.pauseFile・M.iconPath。どちらも省略できる）。
 M.pauseFile = nil
 M.iconPath = nil
 
@@ -51,9 +51,9 @@ local OWN_GAP = 12 -- 言葉と言葉のあいだ
 local OWN_ICON = 18
 local OWN_TEXT_GAP = 10 -- アイコンと文のあいだ
 
--- モードを止めてから出しておく秒。既定は設定の cardLinger（1秒）。hs.settings の koe.cardLinger があればそちらを使う。
+-- モードを止めてから出しておく秒。既定は設定の cardLinger（1秒）。hs.settings の voiceInput.cardLinger があればそちらを使う。
 function M.linger()
-  local v = tonumber(hs.settings.get("koe.cardLinger"))
+  local v = tonumber(hs.settings.get("voiceInput.cardLinger"))
   return (v and v >= 0) and v or (M.lingerDefault or 1)
 end
 
@@ -370,7 +370,7 @@ function M.start()
   end
 end
 
--- 話し続けモードを止めた。カードはピルと一緒に消える（koe.lua が linger 秒後にピルを消す）。
+-- 話し続けモードを止めた。カードはピルと一緒に消える（voice-input.lua が linger 秒後にピルを消す）。
 function M.stop()
   state.active = false
   stopWatching()

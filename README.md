@@ -1,4 +1,4 @@
-# やさしいUI と Koe Mac
+# やさしいUI と 声入力（Mac）
 
 読みやすく、やさしい見た目の「読み物」の作り方と、右シフトで話して文字にする Mac の道具をまとめたリポジトリです。
 ほかのマシンでも同じように使えるように、考え方と材料を置いています。
@@ -9,7 +9,7 @@
   - `reading.css`（共通の見た目）、書き方の決まり、見本の HTML、見た目をそろえて確かめるスクリプト `reading-style`
 - [`design/`](design/)：デザインの考え方
   - やさしい日本語、文字と余白が主役、線を引かない、控えめな色、文字の太さ、短く意味のある動き
-- [`koe-mac/`](koe-mac/)：Koe Mac（右シフトで話して、Macの中だけで文字にする道具）
+- [`voice-input-mac/`](voice-input-mac/)：声入力（Mac）（右シフトで話して、Macの中だけで文字にする道具）
   - Hammerspoon・Karabiner-Elements・Node.js・SoX で動きます。文字にしたものは既定でクリップボードへ。送り先は設定で差し替えられます
 
 ## すぐ試す
@@ -27,7 +27,7 @@ reading/reading-style apply my-page.html
 reading/reading-style check my-page.html
 ```
 
-Koe Mac の入れ方は [`koe-mac/README.md`](koe-mac/README.md) を見てください。
+声入力（Mac） の入れ方は [`voice-input-mac/README.md`](voice-input-mac/README.md) を見てください。
 
 ## 同梱していないもの
 

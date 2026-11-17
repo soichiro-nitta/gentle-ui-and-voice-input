@@ -1,4 +1,4 @@
-# Koe Mac：右シフトで話して、文字にする
+# 声入力（Mac）：右シフトで話して、文字にする
 
 右シフトを押して話すと、Macの中だけで文字にする道具です。声を外へ送りません。
 文字にしたものは、既定ではクリップボードに入ります。設定で、好きなコマンドへ渡すこともできます。
@@ -24,13 +24,13 @@
 
 | ファイル | 役目 |
 |---|---|
-| `koe.lua` | Hammerspoon の本体。キーの合図・録音・届け方 |
+| `voice-input.lua` | Hammerspoon の本体。キーの合図・録音・届け方 |
 | `pill.lua` | 画面の右側のピル（ばねの動き） |
 | `card.lua` | ピルが広がってできる、届けた言葉の一覧 |
 | `listen.mjs` | 話し続けモードの耳。録り続けて、黙ったところで区切る |
 | `transcribe.mjs` | 声を文字にする（transcribe-cpp と SenseVoiceSmall） |
 | `config.example.lua` | 設定の見本 |
-| `karabiner/right-shift-koe.json` | 右シフトを合図のキー（F17・F18・F19）に変える Karabiner の決まり |
+| `karabiner/right-shift-voice-input.json` | 右シフトを合図のキー（F17・F18・F19）に変える Karabiner の決まり |
 | `examples/` | 送り先のコマンドの見本 |
 
 ## 入れ方
@@ -50,8 +50,8 @@ brew install node sox
 ### 2. このフォルダを置いて、部品を入れる
 
 ```sh
-git clone https://github.com/soichiro-nitta/gentle-ui-and-koe.git
-cd gentle-ui-and-koe/koe-mac
+git clone https://github.com/soichiro-nitta/gentle-ui-and-voice-input.git
+cd gentle-ui-and-voice-input/voice-input-mac
 npm install
 ```
 
@@ -59,7 +59,7 @@ npm install
 
 ### 3. モデルを置く
 
-このリポジトリにはモデルを入れていません。次の2つを用意して、`~/.local/share/koe-mac/models/` に置きます。
+このリポジトリにはモデルを入れていません。次の2つを用意して、`~/.local/share/voice-input-mac/models/` に置きます。
 
 - `SenseVoiceSmall-Q8_0.gguf`：文字にするモデル（SenseVoiceSmall を transcribe.cpp 用の GGUF にしたもの）
 - `silero-vad-v6.2-F32.gguf`：声の区間を見つけるモデル（Silero VAD）
@@ -71,10 +71,10 @@ npm install
 
 ```sh
 mkdir -p ~/.config/karabiner/assets/complex_modifications
-cp karabiner/right-shift-koe.json ~/.config/karabiner/assets/complex_modifications/
+cp karabiner/right-shift-voice-input.json ~/.config/karabiner/assets/complex_modifications/
 ```
 
-Karabiner-Elements の「Complex Modifications」→「Add predefined rule」で「Koe Mac（右シフトで話す）」を有効にします。
+Karabiner-Elements の「Complex Modifications」→「Add predefined rule」で「声入力（Mac）（右シフトで話す）」を有効にします。
 
 - 単独で短く押して離す → F17（話し続けモードの切り替え）
 - 単独で 0.3 秒押し続ける → F18（録音の開始）、離す → F19（終わり）
@@ -87,7 +87,7 @@ Karabiner-Elements の「Complex Modifications」→「Add predefined rule」で
 `~/.hammerspoon/init.lua` に1行足して、Hammerspoon の設定を読み直します。
 
 ```lua
-koe = dofile(os.getenv("HOME") .. "/path/to/gentle-ui-and-koe/koe-mac/koe.lua")
+voiceInput = dofile(os.getenv("HOME") .. "/path/to/gentle-ui-and-voice-input/voice-input-mac/voice-input.lua")
 ```
 
 Hammerspoon には、マイク（録音）とアクセシビリティ（キーの合図を受ける・貼り付ける）の許可が要ります。初めて使うときに許可を求められます。
@@ -95,8 +95,8 @@ Hammerspoon には、マイク（録音）とアクセシビリティ（キー�
 ### 6. 設定する（任意）
 
 ```sh
-mkdir -p ~/.config/koe-mac
-cp config.example.lua ~/.config/koe-mac/config.lua
+mkdir -p ~/.config/voice-input-mac
+cp config.example.lua ~/.config/voice-input-mac/config.lua
 ```
 
 主な項目です。書かなかったものは既定のままです。
@@ -118,7 +118,7 @@ cp config.example.lua ~/.config/koe-mac/config.lua
 `send` にコマンドを書くと、文字にしたものを**標準入力**で渡して呼びます。終了コードが 0 なら「送りました」と出ます。
 
 ```lua
-send = { os.getenv("HOME") .. "/path/to/koe-mac/examples/append-to-file.sh" },
+send = { os.getenv("HOME") .. "/path/to/voice-input-mac/examples/append-to-file.sh" },
 ```
 
 - `examples/append-to-file.sh`：時刻つきでメモのファイルに足す見本
@@ -133,11 +133,11 @@ send = { os.getenv("HOME") .. "/path/to/koe-mac/examples/append-to-file.sh" },
   終了コードは 0（文字にできた）・3（1秒未満）・4（聞き取れない）・5（声がない）です。
 - 話し続けモードの耳だけ：16kHz・モノラル・int16 の raw で `node listen.mjs <書き出すフォルダ> --input <ファイル>`。
   1行1つの JSON（`speech-start`・`cut`・`segment`・`discard`）が出ます。
-- Hammerspoon の中で：`koe.testInput = "<int16 の raw>"` を入れてから右シフトを短く押すと、マイクの代わりにそのファイルを流します。
+- Hammerspoon の中で：`voiceInput.testInput = "<int16 の raw>"` を入れてから右シフトを短く押すと、マイクの代わりにそのファイルを流します。
 
 ## 動かないとき
 
-- ログは `~/Library/Logs/koe-mac.log` です。届けなかったときは `skipped: <理由>` が1行出ます。
+- ログは `~/Library/Logs/voice-input-mac.log` です。届けなかったときは `skipped: <理由>` が1行出ます。
   - `too-short`：押した時間が1秒未満
   - `silent`：声が入っていない
   - `unheard`：声はあったが文字にならない

@@ -1,7 +1,7 @@
 // 話し続けモードの耳。マイクを録り続け、声のかたまりを無音で区切って、1つずつファイルにして知らせる。
 // 使い方: node listen.mjs <書き出すフォルダ> [--input <16kHz・モノラル・int16 の raw>]（--input は試し用。マイクの代わりに読む。
-//   KOE_INPUT_PACE=1 でマイクと同じ速さで流す）
-// 標準出力へ1行1つの JSON を出す（Hammerspoon の koe.lua が読む）。
+//   VOICE_INPUT_INPUT_PACE=1 でマイクと同じ速さで流す）
+// 標準出力へ1行1つの JSON を出す（Hammerspoon の voice-input.lua が読む）。
 //   {"event":"ready"}                         録り始めた
 //   {"event":"speech-start"}                  話し始めた
 //   {"event":"cut","path":…}                  区切った（すぐ出す。ここから文字にし始める）
@@ -9,7 +9,7 @@
 //                                             ひとまとまり（16kHz・モノラル・float32 の raw）と、文字にした結果（code・text は transcribe.mjs と同じ意味）。
 //                                             モデルを読み込めなかったときは code なしで出す（呼び出し側が transcribe.mjs で文字にする）。ファイルを消すのは呼び出し側
 //   {"event":"discard","reason":…}            捨てた。too-short：短すぎる音（咳・物音）。far：離れた声（隣の人・別のマイクへ向けた声）
-//   {"event":"idle"}                          長く声がなかった（呼び出し側がやめる）。KOE_IDLE（秒）を入れたときだけ出す
+//   {"event":"idle"}                          長く声がなかった（呼び出し側がやめる）。VOICE_INPUT_IDLE（秒）を入れたときだけ出す
 // 文字にするモデルは、始めたときに1回だけ読み込んで常駐させる（毎回 node を起こして読み込むと0.2秒ほど余計にかかるため）。
 // SIGINT・SIGTERM で、話している途中ならそこまでを出し、文字にし終えてから終わる。2回目の合図ではすぐ強制で終わる。録音は止めずに続けて区切るので、取りこぼしはない。
 // 区切りは音の大きさで見る。環境音の大きさは、直近8秒の音の大きさの下から15%の値とし（話している間も測り続ける）、
@@ -19,13 +19,13 @@ import { createReadStream, mkdirSync, readdirSync, readFileSync, statSync, unlin
 import { join } from "node:path";
 import { createTranscriber } from "./transcribe.mjs";
 
-// 録音には SoX の rec を使う（brew install sox）。場所は KOE_REC で変えられる。
-const REC = process.env.KOE_REC || "rec";
+// 録音には SoX の rec を使う（brew install sox）。場所は VOICE_INPUT_REC で変えられる。
+const REC = process.env.VOICE_INPUT_REC || "rec";
 const RATE = 16000;
 const FRAME = 480; // 30ms
 const FRAME_SECONDS = FRAME / RATE;
 // 何秒黙ったら区切るか。
-const SILENCE_SECONDS = Number(process.env.KOE_SILENCE || 1.0);
+const SILENCE_SECONDS = Number(process.env.VOICE_INPUT_SILENCE || 1.0);
 // 1件の文字起こしがこれを過ぎたら、あきらめて次へ進む（列が止まらないように）。
 const TRANSCRIBE_TIMEOUT_MS = 60000;
 // かたまりの中の間（ま）を、これより長いものだけ記録する（区切りの秒数を決める材料。ログに出る）。
@@ -37,31 +37,31 @@ const PREROLL_SECONDS = 0.4;
 const TAIL_SECONDS = 0.3;
 // 1つのかたまりの上限。これを過ぎたら区切る。
 const MAX_SEGMENT_SECONDS = 60;
-// 黙っている時間で止めるか。既定は止めない（0）。止めたいときは KOE_IDLE に秒数を入れる（設定の idle）。
-const IDLE_SECONDS = Number(process.env.KOE_IDLE || 0);
+// 黙っている時間で止めるか。既定は止めない（0）。止めたいときは VOICE_INPUT_IDLE に秒数を入れる（設定の idle）。
+const IDLE_SECONDS = Number(process.env.VOICE_INPUT_IDLE || 0);
 // 区切った音声ファイルの置き場で、これより古いものは消す（送り損ねたものがたまらないように）。
 const SEGMENT_MAX_AGE_MS = 60 * 60 * 1000;
 // 環境音より何 dB 大きければ声とするか（始まり・続き）。小さすぎる音は環境音が静かでも声としない。
 // 始まりの線は上げすぎない。掃除機のような大きな音が続く中では、線を上げたぶん口元の声まで越えにくくなるため。
-// 離れた声は、下の「越えた割合」で捨てる。KOE_ON_DB（設定の onDb）で試せる。
-const ON_DB = Number(process.env.KOE_ON_DB || 15);
-const OFF_DB = Number(process.env.KOE_OFF_DB || 9);
+// 離れた声は、下の「越えた割合」で捨てる。VOICE_INPUT_ON_DB（設定の onDb）で試せる。
+const ON_DB = Number(process.env.VOICE_INPUT_ON_DB || 15);
+const OFF_DB = Number(process.env.VOICE_INPUT_OFF_DB || 9);
 const ON_FLOOR_DB = -45;
 const OFF_FLOOR_DB = -50;
 // 環境音を測る長さと、下から何割の値を環境音とするか。
 const NOISE_WINDOW_SECONDS = 8;
 const NOISE_PERCENTILE = 0.15;
-// 入力機器（KOE_DEVICE は Hammerspoon が今の入力機器の名前を入れる）。口元のマイク（ピンマイクなど）かどうかで、捨てる線を変える。
-// 口元のマイクと見なす名前は KOE_CLOSE_MIC（正規表現。既定は無線のピンマイクによくある名前）。
-const DEVICE = process.env.KOE_DEVICE || "";
-const CLOSE_MIC = new RegExp(process.env.KOE_CLOSE_MIC || "Wireless Mic|Mic Mini|Lavalier", "i").test(DEVICE);
+// 入力機器（VOICE_INPUT_DEVICE は Hammerspoon が今の入力機器の名前を入れる）。口元のマイク（ピンマイクなど）かどうかで、捨てる線を変える。
+// 口元のマイクと見なす名前は VOICE_INPUT_CLOSE_MIC（正規表現。既定は無線のピンマイクによくある名前）。
+const DEVICE = process.env.VOICE_INPUT_DEVICE || "";
+const CLOSE_MIC = new RegExp(process.env.VOICE_INPUT_CLOSE_MIC || "Wireless Mic|Mic Mini|Lavalier", "i").test(DEVICE);
 // 離れた声を捨てる。区切った1つの発言で、話し始めから最後の声までのうち、始まりの線（環境音＋ON_DB）を越えた割合（ratio）がこれ未満なら送らない。
 // 口元の声は言葉の大半が線を越える（測った例で 0.7〜0.8）。離れた声は続きの線（OFF）と始まりの線の間をうろうろして、
 // 区切られずに長く続き、越えるのは一部だけ（測った例で 0.04〜0.17）。小さめ・遠めの口元の声は 0.2〜0.35 になることがあるので、
-// 口元のマイクは 0.18、ほかは控えめに 0.15 にしてある。環境に合わせて KOE_MIN_RATIO（設定の minRatio）で変える。
-const MIN_VOICED_RATIO = Number(process.env.KOE_MIN_RATIO || (CLOSE_MIC ? 0.18 : 0.15));
-// 捨てた発言の音声は、値を直す材料として少しだけ残す（~/.cache/koe-mac/far/。24時間で消す）。
-const FAR_DIR = process.env.KOE_FAR_DIR || join(process.env.HOME || "/tmp", ".cache/koe-mac/far");
+// 口元のマイクは 0.18、ほかは控えめに 0.15 にしてある。環境に合わせて VOICE_INPUT_MIN_RATIO（設定の minRatio）で変える。
+const MIN_VOICED_RATIO = Number(process.env.VOICE_INPUT_MIN_RATIO || (CLOSE_MIC ? 0.18 : 0.15));
+// 捨てた発言の音声は、値を直す材料として少しだけ残す（~/.cache/voice-input-mac/far/。24時間で消す）。
+const FAR_DIR = process.env.VOICE_INPUT_FAR_DIR || join(process.env.HOME || "/tmp", ".cache/voice-input-mac/far");
 const FAR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const outDir = process.argv[2];
@@ -310,7 +310,7 @@ if (inputFile) {
     finish();
   };
   let stopInputFeed = () => {};
-  if (process.env.KOE_INPUT_PACE) {
+  if (process.env.VOICE_INPUT_INPUT_PACE) {
     // マイクと同じ速さで流す（始めた直後に止める・連打するなどを確かめるため）。
     const data = readFileSync(inputFile);
     let offset = 0;

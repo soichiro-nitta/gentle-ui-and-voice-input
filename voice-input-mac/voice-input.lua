@@ -1,4 +1,4 @@
--- Koe Mac：右シフトで話して、文字にする道具（Hammerspoon の本体）。
+-- 声入力（Mac）：右シフトで話して、文字にする道具（Hammerspoon の本体）。
 --
 -- ・右シフトを長押ししている間だけ録り、離したら文字にする。
 -- ・右シフトを短く1回押すと「話し続けモード」。黙ったら（既定1.0秒）そこまでを1件にして文字にし、すぐ次を待つ。もう1回押すとやめる。
@@ -6,14 +6,14 @@
 --   設定の send に送り先のコマンドを書くと、文字を標準入力で渡して呼ぶ（チャットへ送る・ファイルに足す など、自由に差し替えられる）。
 -- ・文字にするのは transcribe-cpp と SenseVoiceSmall（transcribe.mjs）。Macの中だけで動き、声を外へ送らない。
 --
--- 右シフトは Karabiner-Elements で合図のキーに置きかえる（karabiner/right-shift-koe.json）：
+-- 右シフトは Karabiner-Elements で合図のキーに置きかえる（karabiner/right-shift-voice-input.json）：
 --   単独で短く押して離す → F17（話し続けモードの切り替え）
 --   単独で 0.3 秒押し続ける → F18（長押しの録音を始める）、離す → F19（止める）
 --   ほかのキーと一緒に押したら、もとのキーのまま
 --
 -- 読み込み方（~/.hammerspoon/init.lua）：
---   koe = dofile(os.getenv("HOME") .. "/path/to/koe-mac/koe.lua")
--- 設定は ~/.config/koe-mac/config.lua（config.example.lua を写して直す）。環境変数 KOE_CONFIG で場所を変えられる。
+--   voiceInput = dofile(os.getenv("HOME") .. "/path/to/voice-input-mac/voice-input.lua")
+-- 設定は ~/.config/voice-input-mac/config.lua（config.example.lua を写して直す）。環境変数 VOICE_INPUT_CONFIG で場所を変えられる。
 local M = {}
 
 -- 使う拡張は読み込みのときに先に読んでおく（初めて使う瞬間に読み込むと、まれに失敗するため）。
@@ -22,7 +22,7 @@ for _, name in ipairs({ "hash", "host", "json", "task", "fs", "timer", "settings
 end
 
 local HOME = os.getenv("HOME")
-local DIR = debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or (HOME .. "/koe-mac")
+local DIR = debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or (HOME .. "/voice-input-mac")
 
 local function firstExisting(list)
   for _, path in ipairs(list) do
@@ -33,12 +33,12 @@ local function firstExisting(list)
   return list[1]
 end
 
--- 設定の既定。~/.config/koe-mac/config.lua が返す表で上書きする。
+-- 設定の既定。~/.config/voice-input-mac/config.lua が返す表で上書きする。
 local cfg = {
   node = firstExisting({ "/opt/homebrew/bin/node", "/usr/local/bin/node" }),
   rec = firstExisting({ "/opt/homebrew/bin/rec", "/usr/local/bin/rec" }),
-  asrModel = HOME .. "/.local/share/koe-mac/models/SenseVoiceSmall-Q8_0.gguf",
-  vadModel = HOME .. "/.local/share/koe-mac/models/silero-vad-v6.2-F32.gguf",
+  asrModel = HOME .. "/.local/share/voice-input-mac/models/SenseVoiceSmall-Q8_0.gguf",
+  vadModel = HOME .. "/.local/share/voice-input-mac/models/silero-vad-v6.2-F32.gguf",
   transcribeModule = nil, -- transcribe-cpp の dist/index.js の場所。nil ならこのフォルダの node_modules
   language = "ja",
   clipboard = true, -- 文字にしたものをクリップボードに入れる
@@ -52,9 +52,9 @@ local cfg = {
   minRatio = nil, -- 離れた声を捨てる割合
   closeMic = nil, -- 口元のマイクと見なす入力機器の名前（正規表現）
   cardLinger = 1, -- モードを止めてからカードを出しておく秒
-  log = HOME .. "/Library/Logs/koe-mac.log",
+  log = HOME .. "/Library/Logs/voice-input-mac.log",
 }
-local CONFIG_PATH = os.getenv("KOE_CONFIG") or (HOME .. "/.config/koe-mac/config.lua")
+local CONFIG_PATH = os.getenv("VOICE_INPUT_CONFIG") or (HOME .. "/.config/voice-input-mac/config.lua")
 if hs.fs.attributes(CONFIG_PATH) then
   local ok, user = pcall(dofile, CONFIG_PATH)
   if ok and type(user) == "table" then
@@ -62,12 +62,12 @@ if hs.fs.attributes(CONFIG_PATH) then
       cfg[key] = value
     end
   else
-    print("koe: config error " .. tostring(user))
+    print("voice-input: config error " .. tostring(user))
   end
 end
 M.config = cfg
 
-local CACHE = HOME .. "/.cache/koe-mac"
+local CACHE = HOME .. "/.cache/voice-input-mac"
 local TRANSCRIBE = DIR .. "/transcribe.mjs"
 local LISTEN = DIR .. "/listen.mjs"
 local SEGMENT_DIR = CACHE .. "/segments"
@@ -105,11 +105,11 @@ local function nodeEnv(extra)
   local env = {
     HOME = HOME,
     PATH = (cfg.node and cfg.node:match("^(.*)/[^/]*$") or "/usr/local/bin") .. ":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
-    KOE_ASR_MODEL = cfg.asrModel,
-    KOE_VAD_MODEL = cfg.vadModel,
-    KOE_TRANSCRIBE_MODULE = cfg.transcribeModule,
-    KOE_LANGUAGE = cfg.language,
-    KOE_REC = cfg.rec,
+    VOICE_INPUT_ASR_MODEL = cfg.asrModel,
+    VOICE_INPUT_VAD_MODEL = cfg.vadModel,
+    VOICE_INPUT_TRANSCRIBE_MODULE = cfg.transcribeModule,
+    VOICE_INPUT_LANGUAGE = cfg.language,
+    VOICE_INPUT_REC = cfg.rec,
   }
   for key, value in pairs(extra or {}) do
     env[key] = value
@@ -234,7 +234,7 @@ end
 -- 文字にしたものを届ける。既定はクリップボード。send があれば、そのコマンドへ標準入力で渡す。
 -- 文はコマンドの引数にしない（hs.task は引数の日本語を濁点の分かれた形〔NFD〕に変えることがあるため）。
 function M.deliver(text)
-  print("koe: " .. text)
+  print("voice-input: " .. text)
   if cfg.paste then
     pasteText(text)
   elseif cfg.clipboard then
@@ -552,13 +552,13 @@ function M.startContinuous()
   local deviceName = inputDevice and inputDevice:name() or ""
   log("continuous: device " .. deviceName)
   task:setEnvironment(nodeEnv({
-    KOE_SILENCE = tostring(cfg.silence or 1.0),
-    KOE_IDLE = tostring(cfg.idle or 0),
-    KOE_INPUT_PACE = M.testInput and "1" or nil,
-    KOE_DEVICE = deviceName,
-    KOE_ON_DB = cfg.onDb and tostring(cfg.onDb) or nil,
-    KOE_MIN_RATIO = cfg.minRatio and tostring(cfg.minRatio) or nil,
-    KOE_CLOSE_MIC = cfg.closeMic,
+    VOICE_INPUT_SILENCE = tostring(cfg.silence or 1.0),
+    VOICE_INPUT_IDLE = tostring(cfg.idle or 0),
+    VOICE_INPUT_INPUT_PACE = M.testInput and "1" or nil,
+    VOICE_INPUT_DEVICE = deviceName,
+    VOICE_INPUT_ON_DB = cfg.onDb and tostring(cfg.onDb) or nil,
+    VOICE_INPUT_MIN_RATIO = cfg.minRatio and tostring(cfg.minRatio) or nil,
+    VOICE_INPUT_CLOSE_MIC = cfg.closeMic,
   }))
   if not task:start() then
     skip("rec-failed", "聞き始められませんでした")
@@ -711,5 +711,5 @@ M.watchdog = hs.timer.doEvery(5, function()
   checkPending()
 end)
 
-log("koe: loaded from " .. DIR)
+log("voice-input: loaded from " .. DIR)
 return M

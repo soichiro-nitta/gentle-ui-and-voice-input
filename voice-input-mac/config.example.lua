@@ -1,5 +1,5 @@
--- Koe Mac の設定の見本。~/.config/koe-mac/config.lua に写して、要るところだけ直す。
--- 書かなかった項目は koe.lua の既定のまま。
+-- 声入力（Mac） の設定の見本。~/.config/voice-input-mac/config.lua に写して、要るところだけ直す。
+-- 書かなかった項目は voice-input.lua の既定のまま。
 local HOME = os.getenv("HOME")
 
 return {
@@ -8,8 +8,8 @@ return {
   -- rec = "/opt/homebrew/bin/rec",
 
   -- モデルの場所（README の「モデルを置く」を参照）。
-  asrModel = HOME .. "/.local/share/koe-mac/models/SenseVoiceSmall-Q8_0.gguf",
-  vadModel = HOME .. "/.local/share/koe-mac/models/silero-vad-v6.2-F32.gguf",
+  asrModel = HOME .. "/.local/share/voice-input-mac/models/SenseVoiceSmall-Q8_0.gguf",
+  vadModel = HOME .. "/.local/share/voice-input-mac/models/silero-vad-v6.2-F32.gguf",
   -- transcribe-cpp を別の場所に入れたときだけ書く（dist/index.js のパス）。
   -- transcribeModule = HOME .. "/somewhere/node_modules/transcribe-cpp/dist/index.js",
   language = "ja",
@@ -20,7 +20,7 @@ return {
   paste = false,
   -- 送り先のコマンド。文字にしたものを標準入力で渡す（終了コード 0 で「送りました」）。
   -- 例：examples/append-to-file.sh で、日付つきでメモのファイルに足す。
-  -- send = { HOME .. "/path/to/koe-mac/examples/append-to-file.sh" },
+  -- send = { HOME .. "/path/to/voice-input-mac/examples/append-to-file.sh" },
 
   -- このファイルが新しく現れたら話し続けモードを止める（会議の録音中の印など。使わなければ書かない）。
   -- pauseFile = HOME .. "/.local/share/my-meeting/in-meeting",

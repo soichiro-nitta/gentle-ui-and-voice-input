@@ -3,24 +3,24 @@
 // 文字を標準出力へ出す。1秒未満なら何も出さず終了コード 3、聞き取れなければ終了コード 4、声がなければ 5。
 // 話し続けモードの耳（listen.mjs）は、ここの createTranscriber を読み込んでモデルを常駐させ、毎回の読み込みを省く。
 // 場所は環境変数で変えられる：
-//   KOE_ASR_MODEL         文字にするモデル（既定 ~/.local/share/koe-mac/models/SenseVoiceSmall-Q8_0.gguf）
-//   KOE_VAD_MODEL         声の区間を見つけるモデル（既定 ~/.local/share/koe-mac/models/silero-vad-v6.2-F32.gguf）
-//   KOE_TRANSCRIBE_MODULE transcribe-cpp の場所（既定はこのフォルダの node_modules の transcribe-cpp。npm install で入る）
-//   KOE_LANGUAGE          言語（既定 ja）
+//   VOICE_INPUT_ASR_MODEL         文字にするモデル（既定 ~/.local/share/voice-input-mac/models/SenseVoiceSmall-Q8_0.gguf）
+//   VOICE_INPUT_VAD_MODEL         声の区間を見つけるモデル（既定 ~/.local/share/voice-input-mac/models/silero-vad-v6.2-F32.gguf）
+//   VOICE_INPUT_TRANSCRIBE_MODULE transcribe-cpp の場所（既定はこのフォルダの node_modules の transcribe-cpp。npm install で入る）
+//   VOICE_INPUT_LANGUAGE          言語（既定 ja）
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const MODELS = join(homedir(), ".local/share/koe-mac/models");
-const ASR_MODEL = process.env.KOE_ASR_MODEL || join(MODELS, "SenseVoiceSmall-Q8_0.gguf");
-const VAD_MODEL = process.env.KOE_VAD_MODEL || join(MODELS, "silero-vad-v6.2-F32.gguf");
-const ENGINE = process.env.KOE_TRANSCRIBE_MODULE ? pathToFileURL(process.env.KOE_TRANSCRIBE_MODULE).href : "transcribe-cpp";
+const MODELS = join(homedir(), ".local/share/voice-input-mac/models");
+const ASR_MODEL = process.env.VOICE_INPUT_ASR_MODEL || join(MODELS, "SenseVoiceSmall-Q8_0.gguf");
+const VAD_MODEL = process.env.VOICE_INPUT_VAD_MODEL || join(MODELS, "silero-vad-v6.2-F32.gguf");
+const ENGINE = process.env.VOICE_INPUT_TRANSCRIBE_MODULE ? pathToFileURL(process.env.VOICE_INPUT_TRANSCRIBE_MODULE).href : "transcribe-cpp";
 const SAMPLE_RATE = 16000;
 const MIN_SECONDS = 1;
 // 1回に文字にする長さは30秒までにする。長い録音は声の切れ目で分ける。
 const MAX_PIECE_SECONDS = 25;
-const LANGUAGE = process.env.KOE_LANGUAGE || "ja";
+const LANGUAGE = process.env.VOICE_INPUT_LANGUAGE || "ja";
 // 消す日本語の言いよどみ。
 const FILLERS = /(?:え[ーえっ]*と|えー+|あのー+|うー+ん|んー+)[、,，…]?\s*/gu;
 
