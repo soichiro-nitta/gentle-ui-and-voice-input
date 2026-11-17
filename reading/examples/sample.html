@@ -110,7 +110,7 @@ img, video { max-width: 100%; height: auto; border-radius: 12px; }
    横に長い表は、狭い画面で表の中だけ横に動く。table.lines は古い書き方で、素の table と同じ見た目になる（新しく付けない） */
 table { border-collapse: separate; border-spacing: 0; font-size: 16px; line-height: 1.6;
   width: calc(100% + 28px); margin: 4px -14px 20px; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 10px 14px; vertical-align: top; }
+th, td { text-align: left; padding: 10px 14px; vertical-align: top; overflow-wrap: break-word; }
 th { font-size: 14px; font-weight: 500; color: var(--sub); padding-top: 4px; padding-bottom: 6px; }
 tr:has(> td) > th { font-size: inherit; color: var(--fg); padding-top: 10px; padding-bottom: 10px; }
 tr:nth-child(odd of :has(> td)) > * { background: var(--row); }
