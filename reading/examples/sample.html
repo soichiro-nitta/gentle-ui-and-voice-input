@@ -18,7 +18,11 @@ html { -webkit-text-size-adjust: 100%; }
 body { background: #fff; color: var(--fg); margin: 0; padding: 64px 20px 72px;
   font: 18px/1.8 -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   overflow-wrap: anywhere; }
-main { max-width: 640px; margin: 0 auto; }
+/* 並び：枠は 960px で画面の中央、文章は 640px で枠の左に寄せる。
+   図・画像・表は枠いっぱいまで使える。見出しも文章と同じ左の線にそろう。<main class="wide"> は古い書き方で、同じ見た目になる */
+main { max-width: 960px; margin: 0 auto; }
+:is(main, main > section) > :is(p, ul, ol, dl, blockquote, pre, details, .note) { max-width: 640px; }
+:is(main, main > section) > ul.plan { max-width: 668px; }
 
 /* 見出しは控えめ：ページの題（h1）も段の見出し（h2）も、小さめのグレー */
 main h1 { font-size: 15px; font-weight: 500; color: var(--sub); margin: 0 0 12px; letter-spacing: .03em; }
@@ -107,9 +111,9 @@ img, video { max-width: 100%; height: auto; border-radius: 12px; }
 /* 表：予定の表（ul.plan）と同じ考え方。クラスを付けない素の <table> が既定。
    線は使わず、データの行の1行おきに薄い面（--row）、面の角は丸く。見出しの行（th だけの行）は小さなグレーの文字。
    数字の列は td.n（th.n）で右寄せ。数字はどこでも等幅。合否は色の文字だけ（.ok 緑＝合格、.ng 赤＝不合格、.wait オレンジ＝注意）で、枠や背景で囲まない。
-   横に長い表は、狭い画面で表の中だけ横に動く。table.lines は古い書き方で、素の table と同じ見た目になる（新しく付けない） */
+   表の幅は中身に合わせ、最大で枠（960px）いっぱい。横に長い表は、狭い画面で表の中だけ横に動く。table.lines は古い書き方で、素の table と同じ見た目になる（新しく付けない） */
 table { border-collapse: separate; border-spacing: 0; font-size: 16px; line-height: 1.6;
-  width: calc(100% + 28px); margin: 4px -14px 20px; font-variant-numeric: tabular-nums; }
+  width: auto; max-width: calc(100% + 28px); margin: 4px -14px 20px; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 10px 14px; vertical-align: top; overflow-wrap: break-word; }
 th { font-size: 14px; font-weight: 500; color: var(--sub); padding-top: 4px; padding-bottom: 6px; }
 tr:has(> td) > th { font-size: inherit; color: var(--fg); padding-top: 10px; padding-bottom: 10px; }
@@ -123,9 +127,7 @@ td .ok, td.ok, td .ng, td.ng, td .wait, td.wait, td .warn, td.warn { font-weight
 td code { background: none; padding: 0; }
 
 /* 画像つきの資料（変更の確認・会議で見せる資料）：画像は角丸・最大幅をそろえ、Before/After は同じ大きさで横に並べる。狭い幅では縦に。
-   <main class="wide"> で画像の幅を広げる（文章の幅は 640px のまま） */
-main.wide { max-width: 960px; }
-main.wide > p, main.wide > ul, main.wide > ol, main.wide > .note { max-width: 640px; }
+   画像は枠（960px）いっぱいまで広がる（文章の幅は 640px のまま。並びは main の決まり） */
 figure { margin: 16px 0 32px; }
 figure img { display: block; width: 100%; border-radius: 12px; box-shadow: 0 0 0 1px #ececf0; }
 figcaption { font-size: 14px; color: var(--sub); line-height: 1.6; margin-top: 8px; }
