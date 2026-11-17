@@ -60,6 +60,7 @@
 | `.wait` | 期限・返事待ち・止まった・失敗 | オレンジ、少し太い。行の頭に置くと少し小さくなる |
 | `.ok` | 緑の文字（済みの印には使わず `li.done` を使う） | 緑 |
 | `.err` | どうしても赤で伝えたいエラー（ふだんは `.wait`） | 赤 |
+| `.ng` | 表の不合格（赤の文字）。`td.n`・`th.n` は表の数字の列（右寄せ） | 赤 |
 | `.time` | 時刻・日付 | 数字の幅がそろう、medium |
 | `strong` | 文の中の強調 | 少し太い |
 | `code` | コード・コマンド | 等幅、薄いグレーの面 |
@@ -138,15 +139,23 @@
 
 ## 表
 
-`<table>` は、`reading-style apply` で `class="lines"` が付きます。数字の列は `td.n`（右寄せ）。
-列が多いときは `<div class="tw">` で包むと、表の中だけ横に動きます。
+表は、今日の予定（`ul.plan`）と同じ考え方の1つの形にそろえます。クラスを付けない素の `<table>` が既定です。
+
+- 線は使いません。データの行の1行おきに薄い面（`--row`）が付き、面の角は丸くなります。
+- 見出しの行（`th` だけの行）は、小さなグレーの文字です。
+- 数字の列は `td.n`（見出しは `th.n`）で右寄せ。数字はどこでも等幅です。
+- 合否は色の文字だけで書きます。`<span class="ok">`は緑（合格）、`<span class="ng">`は赤（不合格）、`<span class="wait">`はオレンジ（注意）。枠や背景、札で囲みません。
+- 横に長い表は、狭い画面で表の中だけ横に動きます（ページは横に動きません）。
 
 ```html
-<div class="tw"><table class="lines">
-<thead><tr><th>なに</th><th>金額</th></tr></thead>
-<tbody><tr><td>会場</td><td class="n">1,200円</td></tr></tbody>
-</table></div>
+<table>
+<tr><th>背景</th><th>文字</th><th class="n">比</th><th>判定</th></tr>
+<tr><td>白</td><td>#333333</td><td class="n">12.63</td><td><span class="ok">AA</span></td></tr>
+<tr><td>白</td><td>#999999</td><td class="n">2.85</td><td><span class="ng">×</span></td></tr>
+</table>
 ```
+
+`table.lines`（下線の表）は古い書き方です。`reading-style apply` が外します。表の中に `style=`、自前の線（`border`）、上のほかのクラスを使うと、check が「直してほしい」と出します。
 
 ## 画像
 
