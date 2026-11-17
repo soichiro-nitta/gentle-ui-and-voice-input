@@ -166,6 +166,8 @@
 | `main.wide` | 画像を広く見せたいページ。文章の幅は 640px のまま、画像だけ 960px まで |
 | `div.scroll` | 横に長い画像を、そのままの大きさで横に動かして見せる |
 
+画像は、本文幅の2倍以上の幅（1280px 以上。`div.pair` の2枚並びは 640px 以上）の PNG にします。Retina の2倍で撮り、小さく切り抜いたものを拡大して載せません。足りないと check が「画像が荒い」と出します。
+
 ```html
 <div class="pair">
 <figure><img src="before.png" alt="直す前"><figcaption>直す前</figcaption></figure>

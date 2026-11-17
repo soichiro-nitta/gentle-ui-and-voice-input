@@ -20,6 +20,8 @@
   - 要素に style= を直接書かない。大きさや余白は reading.css の形を使い、足りなければ reading.css へ足す。
   - 1段落1つのこと。「どこ：」「見方：」のようなラベル＋<br> で1段落に詰めない。
   - h1 のすぐ下に結論を1文（<p class="summary">）。結論を求めないページは <meta name="reading-lead" content="none">。
+  - 画像は本文幅の2倍以上の幅（1280px 以上）の PNG にする（写真は品質の高い WebP・JPEG でもよい）。
+    Retina の2倍（devicePixelRatio 2）で撮る。小さく切り抜いて拡大して載せない。部分が要るなら、その部分を2倍で撮り直す。
   - 本文は <main> で包む（見出し・段落の形は main h1・main p に当てているため）。
   - 表はクラスを付けない素の <table> で書く。見た目は reading.css が決める：線なし、データの行の1行おきに薄い面と角丸、
     見出しの行（th だけの行）は小さなグレーの文字、狭い画面では表の中だけ横に動く。数字の列は td.n（見出しは th.n）で右寄せ・等幅の数字。
@@ -30,7 +32,8 @@
       本文の見出し・段落が <main> の外にある（--fix は <main> も <script> もないものだけ包む）、
       reading.css が古い（--fix で入れ直す）、reading.css のほかに <style>（data-page なし）や外の CSS（<link rel="stylesheet">）がある、
       reading.css にないクラスを使っている、本文の要素の style=、<br> の3つ以上の連続、「ラベル：」＋<br> が2か所以上、
-      200字を超える段落（会話の生ログ p.raw は除く）、頭に結論がない。
+      200字を超える段落（会話の生ログ p.raw は除く）、頭に結論がない、
+      荒く見える画像（本文の <img> の幅が本文幅の2倍＝1280px に足りない。.pair の2枚並びは 640px。.scroll の中は見ない）。
     本文の文字がほとんどないページ（JavaScript で描く・絵だけ）と、frag*.html・*.before.html（作業のかけら・前の版）は見ない。
     own の印があるものは、書き方も見ない。
 """
@@ -167,12 +170,78 @@ def table_issues(src):
     return out
 
 
-def lint(src):
+IMG_MIN = 1280
+IMG_RE = re.compile(r"<img\b[^>]*\bsrc=\"([^\"]+)\"", re.I)
+PAIR_RE = re.compile(r"<(div|figure)\b[^>]*class=\"[^\"]*\bpair\b[^\"]*\"[^>]*>.*?</\1>", re.S | re.I)
+# .scroll の中は元の大きさのまま出す（本文幅に広げない）ので、幅では見ない
+SCROLL_RE = re.compile(r"<(div|figure)\b[^>]*class=\"[^\"]*\bscroll\b[^\"]*\"[^>]*>.*?</\1>", re.S | re.I)
+
+
+def image_width(path):
+    """PNG・JPEG・WebP・GIF の幅（px）。読めなければ None。"""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(64 * 1024)
+    except OSError:
+        return None
+    if head[:8] == b"\x89PNG\r\n\x1a\n":
+        return int.from_bytes(head[16:20], "big")
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return int.from_bytes(head[6:8], "little")
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        kind = head[12:16]
+        if kind == b"VP8X":
+            return int.from_bytes(head[24:27], "little") + 1
+        if kind == b"VP8 ":
+            return int.from_bytes(head[26:28], "little") & 0x3FFF
+        if kind == b"VP8L":
+            return (int.from_bytes(head[21:25], "little") & 0x3FFF) + 1
+        return None
+    if head[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(head):
+            if head[i] != 0xFF:
+                i += 1
+                continue
+            marker = head[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                return int.from_bytes(head[i + 7:i + 9], "big")
+            i += 2 + int.from_bytes(head[i + 2:i + 4], "big")
+    return None
+
+
+def blurry_images(body, path):
+    """本文幅の2倍に足りない画像（荒く見える）。ファイルが手元にないもの・SVG・data: は見ない。"""
+    if not path:
+        return []
+    base = Path(path).parent
+    in_pair = {m for blk in PAIR_RE.finditer(body) for m in IMG_RE.findall(blk.group(0))}
+    body = SCROLL_RE.sub("", body)
+    out = []
+    for src in dict.fromkeys(IMG_RE.findall(body)):
+        if re.match(r"(?:[a-z]+:|//)", src, re.I) and not src.startswith("file://"):
+            continue
+        local = base / re.sub(r"^file://", "", src).split("?")[0].split("#")[0]
+        if src.startswith("file://"):
+            local = Path(re.sub(r"^file://", "", src))
+        if local.suffix.lower() == ".svg":
+            continue
+        width = image_width(local)
+        need = IMG_MIN // 2 if src in in_pair else IMG_MIN
+        if width and width < need:
+            out.append(f"{Path(src).name} {width}px")
+    return out
+
+
+def lint(src, path=""):
     """書き方の「直してほしい」。本文の文字がほとんどないページ（JavaScript で描く・絵だけ）は見ない。"""
     body = main_body(src)
     if len(text_of(body)) < 40:
         return []
     out = table_issues(src)
+    blurry = blurry_images(body, path)
+    if blurry:
+        out.append(f"画像が荒い（幅が本文幅の2倍の{IMG_MIN}px に足りない：" + "、".join(blurry[:4]) + (f" ほか{len(blurry) - 4}枚" if len(blurry) > 4 else "") + "。2倍で撮り直す）")
     styled = sorted({t.lower() for t in re.findall(r"<([a-zA-Z][\w-]*)\b[^>]*\sstyle\s*=", body)})
     if styled:
         out.append("要素に直接 style=（" + " ".join(styled) + "）")
@@ -213,7 +282,7 @@ def inspect(path):
     src = path.read_text(encoding="utf-8", errors="replace")
     if OWN_RE.search(src):
         return None
-    warn = lint(src)
+    warn = lint(src, str(path))
     if MARK in src:
         warn = style_warn(src) + warn
         if outside_main(src):
