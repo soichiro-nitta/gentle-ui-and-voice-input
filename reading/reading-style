@@ -27,8 +27,12 @@
     見出しの行（th だけの行）は小さなグレーの文字、狭い画面では表の中だけ横に動く。数字の列は td.n（見出しは th.n）で右寄せ・等幅の数字。
     合否は色の文字だけ：<span class="ok">（緑＝合格）、<span class="ng">（赤＝不合格）、<span class="wait">（オレンジ＝注意）。枠・背景で囲まない。
     table.lines は古い書き方（apply が外す）。
+  - 表は枠いっぱいで、列の幅は中身ではなく割合で固定する（table-layout: fixed）。同じ読み物の中で列の数が同じ表は、同じ割合にする。
+    apply がそれぞれの列の長さ（数字・日付の列は短く、文章の列は長く）をまとめて測り、同じ割合の <colgroup data-cols><col style="width:N%">… を付ける
+    （何度かけても同じ。手で書いた colgroup は残す）。<col> の style="width:N%" だけは書いてよい。
   - check の「直してほしい」：
       表に自前の style・線（data-page の border）・TABLE_CLASSES にないクラス（table.lines も。--fix は apply で外す）、
+      列の数が同じなのに列の幅の割合がそろっていない表（--fix は apply）、
       本文の見出し・段落が <main> の外にある（--fix は <main> も <script> もないものだけ包む）、
       reading.css が古い（--fix で入れ直す）、reading.css のほかに <style>（data-page なし）や外の CSS（<link rel="stylesheet">）がある、
       reading.css にないクラスを使っている、本文の要素の style=、<br> の3つ以上の連続、「ラベル：」＋<br> が2か所以上、
@@ -105,7 +109,120 @@ def apply(src):
     else:
         src = block + src
     src = wrap_main(src)
-    return re.sub(r'<table class="lines">', "<table>", src)
+    src = re.sub(r'<table class="lines">', "<table>", src)
+    return add_colgroups(src)
+
+
+# 表の列の幅：同じ読み物の中で列の数が同じ表は、同じ割合の <colgroup data-cols> にする
+COLGROUP_AUTO_RE = re.compile(r"<colgroup\b[^>]*\bdata-cols\b[^>]*>.*?</colgroup>\s*", re.S | re.I)
+COLGROUP_RE = re.compile(r"<colgroup\b.*?</colgroup>", re.S | re.I)
+ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S | re.I)
+CELL_RE = re.compile(r"<(t[hd])\b([^>]*)>(.*?)</\1>", re.S | re.I)
+SPAN_RE = re.compile(r"\bcolspan\s*=\s*\"?(\d+)", re.I)
+
+
+def outside_script(src, fn):
+    """<style>・<script>・<template> の外だけに fn をかける。"""
+    parts = re.split(r"(<(?:script|template|style)\b.*?</(?:script|template|style)>)", src, flags=re.S | re.I)
+    return "".join(p if i % 2 else fn(p) for i, p in enumerate(parts))
+
+
+def text_width(html):
+    """見た目の長さ（全角1、半角0.55）。"""
+    t = re.sub(r"\s+", " ", TAG_RE.sub("", html)).strip()
+    t = re.sub(r"&[a-z#0-9]+;", "x", t)
+    return sum(1 if ord(ch) > 0x2000 else 0.55 for ch in t)
+
+
+def table_rows(table):
+    """[(cells, colspan のある行か)]。rowspan がある表は None（列がずれるので測らない）。"""
+    if re.search(r"\browspan\s*=", table, re.I):
+        return None
+    return [CELL_RE.findall(r) for r in ROW_RE.findall(table)]
+
+
+def col_count(rows):
+    counts = [sum(int(m.group(1)) if (m := SPAN_RE.search(a)) else 1 for _, a, _ in cells) for cells in rows if cells]
+    return max(counts) if counts else 0
+
+
+def col_widths(tables):
+    """同じ列の数の表をまとめて、列ごとの割合（%）を決める（表の幅は 960px として測る）。
+    列が要る幅は、見出しの長さと、中身の長い方から2割あたりの長さの大きい方（1字16px、見出しは14px、左右の余白28px）。
+    短い列（数字・日付・状態）は要る幅をそのまま取り、残りを文章の列で要る幅に応じて分ける。"""
+    n = col_count(tables[0])
+    head = [0.0] * n
+    lens = [[] for _ in range(n)]
+    for rows in tables:
+        for cells in rows:
+            if len(cells) != n:
+                continue
+            for i, (tag, _, body) in enumerate(cells):
+                if tag.lower() == "th" and not any(t.lower() == "td" for t, _, _ in cells):
+                    head[i] = max(head[i], text_width(body))
+                else:
+                    lens[i].append(text_width(body))
+    need = []
+    for i, xs in enumerate(lens):
+        xs = sorted(xs) or [0]
+        body = min(xs[min(len(xs) - 1, int(len(xs) * 0.8))], 40)
+        need.append(max(body * 16, head[i] * 14, 36) + 28)
+    total_w, short_max = 960, 200
+    short = [i for i, w in enumerate(need) if w <= short_max]
+    fixed = sum(need[i] for i in short)
+    if fixed > total_w * 0.6 or len(short) == n:
+        px = [w * total_w / sum(need) for w in need]
+    else:
+        rest = sum(need[i] for i in range(n) if i not in short)
+        px = [need[i] if i in short else need[i] * (total_w - fixed) / rest for i in range(n)]
+    pct = [max(6, round(w * 100 / total_w)) for w in px]
+    pct[pct.index(max(pct))] += 100 - sum(pct)
+    return pct
+
+
+def add_colgroups(src):
+    def fix(part):
+        part = TABLE_RE.sub(lambda m: COLGROUP_AUTO_RE.sub("", m.group(0)), part)
+        groups = {}
+        for m in TABLE_RE.finditer(part):
+            t = m.group(0)
+            rows = table_rows(t)
+            if COLGROUP_RE.search(t) or not rows:
+                continue
+            n = col_count(rows)
+            if n >= 2:
+                groups.setdefault(n, []).append(rows)
+        widths = {n: col_widths(ts) for n, ts in groups.items()}
+
+        def put(m):
+            t = m.group(0)
+            rows = table_rows(t)
+            if COLGROUP_RE.search(t) or not rows or col_count(rows) not in widths:
+                return t
+            cols = "".join(f'<col style="width:{w}%">' for w in widths[col_count(rows)])
+            return re.sub(r"(<table\b[^>]*>)", lambda h: h.group(1) + f"\n<colgroup data-cols>{cols}</colgroup>", t, count=1)
+
+        return TABLE_RE.sub(put, part)
+
+    return outside_script(src, fix)
+
+
+def width_mismatch(src):
+    """同じ読み物の中で、列の数が同じなのに列の幅の割合がそろっていない表があるか。"""
+    seen = {}
+    bad = set()
+    for t in TABLE_RE.findall(SCRIPT_RE.sub("", STYLE_RE.sub("", src))):
+        rows = table_rows(t)
+        if not rows:
+            continue
+        n = col_count(rows)
+        if n < 2:
+            continue
+        cg = COLGROUP_RE.search(t)
+        key = tuple(re.findall(r"width\s*:\s*([\d.]+%?)", cg.group(0))) if cg else ("既定",)
+        if seen.setdefault(n, key) != key:
+            bad.add(n)
+    return sorted(bad)
 
 
 def outside_main(src):
@@ -147,7 +264,7 @@ def has_conclusion(body):
 
 
 # 表の中で使ってよいクラス（reading.css の表の形）
-TABLE_CLASSES = {"n", "ok", "ng", "wait", "warn", "err", "note", "sub", "meta", "small", "time", "key", "v"}
+TABLE_CLASSES = {"n", "ok", "ng", "wait", "warn", "err", "note", "sub", "meta", "small", "time", "key", "v", "cols-2", "cols-3", "cols-4", "cols-5"}
 TABLE_RE = re.compile(r"<table\b.*?</table>", re.S | re.I)
 BORDER_RE = re.compile(r"(?:^|[},\s])(?:table|tr|th|td|thead|tbody)\b[^{}]*\{[^}]*\bborder(?:-(?:top|bottom|left|right))?\s*:", re.I)
 
@@ -157,7 +274,7 @@ def table_issues(src):
     tables = TABLE_RE.findall(SCRIPT_RE.sub("", STYLE_RE.sub("", src)))
     page_css = "".join(m.group(0) for m in STYLE_RE.finditer(src) if "data-page" in m.group(1))
     out = []
-    if any(re.search(r"\sstyle\s*=", t, re.I) for t in tables):
+    if any(re.search(r"\sstyle\s*=", re.sub(r'<col\b[^>]*\bstyle="\s*width\s*:\s*[\d.]+%;?\s*"[^>]*>', "", t, flags=re.I), re.I) for t in tables):
         out.append("表に自前の style=")
     if BORDER_RE.search(page_css):
         out.append("表に自前の線（data-page の border）")
@@ -167,6 +284,9 @@ def table_issues(src):
             bad.update(c for c in attr.split() if c not in TABLE_CLASSES)
     if bad:
         out.append("表に知らないクラス（" + " ".join(sorted(bad)) + "。素の table と n・ok・ng・wait で）")
+    mismatch = width_mismatch(src)
+    if mismatch:
+        out.append("表の列の幅がそろっていない（" + "・".join(f"{n}列" for n in mismatch) + "の表。apply で同じ割合に）")
     return out
 
 
@@ -242,7 +362,7 @@ def lint(src, path=""):
     blurry = blurry_images(body, path)
     if blurry:
         out.append(f"画像が荒い（幅が本文幅の2倍の{IMG_MIN}px に足りない：" + "、".join(blurry[:4]) + (f" ほか{len(blurry) - 4}枚" if len(blurry) > 4 else "") + "。2倍で撮り直す）")
-    styled = sorted({t.lower() for t in re.findall(r"<([a-zA-Z][\w-]*)\b[^>]*\sstyle\s*=", body)})
+    styled = sorted({t.lower() for t in re.findall(r"<([a-zA-Z][\w-]*)\b[^>]*\sstyle\s*=", body)} - {"col"})
     if styled:
         out.append("要素に直接 style=（" + " ".join(styled) + "）")
     if re.search(r"(?:<br\s*/?>\s*){3,}", body, re.I):
@@ -331,7 +451,7 @@ def main():
             p = Path(r["path"])
             p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
             r["fixed"] = True
-        elif args.fix and r.get("ok_style") and (OLD_CSS in r["warn"] or any("lines" in w for w in r["warn"])):
+        elif args.fix and r.get("ok_style") and (OLD_CSS in r["warn"] or any("lines" in w or w.startswith("表の列の幅") for w in r["warn"])):
             p = Path(r["path"])
             p.write_text(apply(p.read_text(encoding="utf-8")), encoding="utf-8")
             r["warn"] = [w for w in (inspect(p) or {}).get("warn", [])]
