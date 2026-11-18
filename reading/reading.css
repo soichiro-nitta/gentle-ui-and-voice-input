@@ -104,10 +104,20 @@ img, video { max-width: 100%; height: auto; border-radius: 12px; }
 /* 表：予定の表（ul.plan）と同じ考え方。クラスを付けない素の <table> が既定。
    線は使わず、データの行の1行おきに薄い面（--row）、面の角は丸く。見出しの行（th だけの行）は小さなグレーの文字。
    数字の列は td.n（th.n）で右寄せ。数字はどこでも等幅。合否は色の文字だけ（.ok 緑＝合格、.ng 赤＝不合格、.wait オレンジ＝注意）で、枠や背景で囲まない。
-   表の幅は中身に合わせ、最大で枠（960px）いっぱい。横に長い表は、狭い画面で表の中だけ横に動く。table.lines は古い書き方で、素の table と同じ見た目になる（新しく付けない） */
-table { border-collapse: separate; border-spacing: 0; font-size: 16px; line-height: 1.6;
-  width: auto; max-width: calc(100% + 28px); margin: 4px -14px 20px; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 10px 14px; vertical-align: top; overflow-wrap: break-word; }
+   表は枠（960px）いっぱい。横に長い表は、狭い画面で表の中だけ横に動く。table.lines は古い書き方で、素の table と同じ見た目になる（新しく付けない）。
+   列の幅：中身で決めず、割合で固定する（table-layout: fixed）。
+   割合は colgroup の col に width:N% で書く（reading-style apply が、同じ読み物の中で列の数が同じ表をまとめて、同じ割合の colgroup を付ける）。
+   colgroup がない表は、列の数で決まった割合（2列 35/65、3列 25/35/40、4列 28/16/28/28、5列 24/16/20/20/20、6列から等分）。table.cols-2〜cols-5 で明示もできる。長い言葉は折り返す */
+table { border-collapse: separate; border-spacing: 0; font-size: 16px; line-height: 1.6; table-layout: fixed;
+  width: calc(100% + 28px); max-width: calc(100% + 28px); margin: 4px -14px 20px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 10px 14px; vertical-align: top; overflow-wrap: anywhere; }
+:is(table.cols-2, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(2):last-child)) tr > :nth-child(1) { width: 35%; }
+:is(table.cols-3, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(3):last-child)) tr > :nth-child(1) { width: 25%; }
+:is(table.cols-3, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(3):last-child)) tr > :nth-child(2) { width: 35%; }
+:is(table.cols-4, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(4):last-child)) tr > :nth-child(odd) { width: 28%; }
+:is(table.cols-4, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(4):last-child)) tr > :nth-child(2) { width: 16%; }
+:is(table.cols-5, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(5):last-child)) tr > :nth-child(1) { width: 24%; }
+:is(table.cols-5, table:not([class*="cols-"]):not(:has(> colgroup)):has(tr > :nth-child(5):last-child)) tr > :nth-child(2) { width: 16%; }
 th { font-size: 14px; font-weight: 500; color: var(--sub); padding-top: 4px; padding-bottom: 6px; }
 tr:has(> td) > th { font-size: inherit; color: var(--fg); padding-top: 10px; padding-bottom: 10px; }
 tr:nth-child(odd of :has(> td)) > * { background: var(--row); }
@@ -137,7 +147,7 @@ div.note li { margin-bottom: 8px; }
 
 /* 表：本文の幅の中に収め、列が多くて入りきらないときは表の中だけ横にスクロール（ページは横に動かない） */
 @media (max-width: 720px) {
-  table { display: block; width: auto; max-width: calc(100% + 28px); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { display: block; width: auto; max-width: calc(100% + 28px); table-layout: auto; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   th, td { min-width: 5em; }
   .scroll { max-width: 100%; }
   pre { max-width: 100%; overflow-x: auto; }
